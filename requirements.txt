@@ -1,0 +1,18 @@
+# Canon PIXMA G2460 - Web Yazdırma Servisi
+# Python 3.8+ gereklidir
+
+# Web Framework
+Flask>=2.3.0
+Werkzeug>=2.3.0
+
+# Resim İşleme
+Pillow>=10.0.0
+
+# PDF Oluşturma
+reportlab>=4.0.0
+
+# Windows Yazdırma Desteği (sadece Windows için)
+pywin32>=306; sys_platform == 'win32'
+
+# Opsiyonel: Geliştirme araçları
+python-dotenv>=1.0.0

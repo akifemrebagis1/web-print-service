@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Print Service - Ağ Yazdırma Servisi v2.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        .header .subtitle {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        .features {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .feature {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        .printer-status {
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            border-radius: 10px;
+            padding: 10px 20px;
+            margin-top: 15px;
+            color: #27ae60;
+            font-weight: 600;
+        }
+        .printer-status.offline {
+            background: rgba(231, 76, 60, 0.1);
+            border-color: #e74c3c;
+            color: #c0392b;
+        }
+        .main-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .tab-container {
+            display: flex;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 5px;
+        }
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #6c757d;
+        }
+        .tab.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 25px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-input {
+            width: 100%;
+            padding: 20px;
+            border: 2px dashed #bdc3c7;
+            border-radius: 15px;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+        .file-input:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+            transform: translateY(-2px);
+        }
+        .file-input.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            transform: scale(1.02);
+        }
+        input[type="file"] {
+            opacity: 0;
+            position: absolute;
+            z-index: -1;
+        }
+        .file-list {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #e9ecef;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        .file-item .file-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .file-item .file-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .file-item .file-size {
+            color: #6c757d;
+            font-size: 0.8em;
+        }
+        .remove-file {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .layout-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .layout-option {
+            position: relative;
+        }
+        .layout-option input[type="radio"] {
+            opacity: 0;
+            position: absolute;
+        }
+        .layout-label {
+            display: block;
+            padding: 20px 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        .layout-label:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .layout-option input[type="radio"]:checked + .layout-label {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        .layout-preview {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #667eea;
+        }
+        .checkbox-group label {
+            margin: 0;
+            font-size: 1em;
+            color: #495057;
+        }
+        .settings-panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
+        .settings-row label {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .settings-row select,
+        .settings-row input[type="range"] {
+            width: 150px;
+        }
+        .settings-row select {
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: white;
+        }
+        .range-value {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            min-width: 40px;
+            text-align: center;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 18px 40px;
+            border-radius: 50px;
+            font-size: 1.2em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+        }
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .btn .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        .btn.loading .spinner {
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 15px;
+            display: none;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 15px;
+            display: none;
+        }
+        .result.success {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+        .result.error {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+        .result.warning {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+        .result-details {
+            margin-top: 15px;
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        .preview-area {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+        }
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9em;
+        }
+        .system-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 0.8em;
+        }
+        .queue-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .queue-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .queue-item:last-child {
+            border-bottom: none;
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .layout-grid {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            }
+            
+            .features {
+                flex-direction: column;
+                align-items: center;
+            }
+            .settings-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖨️ Web Print Service</h1>
+            <div class="subtitle">Ağ Yazdırma Servisi v2.0</div>
+            <div id="printer-status" class="printer-status">
+                ⏳ Yazıcı durumu kontrol ediliyor...
+            </div>
+            <div class="features">
+                <span class="feature">📄 Çoklu Format</span>
+                <span class="feature">📚 Toplu İşlem</span>
+                <span class="feature">🎨 Layout Seçenekleri</span>
+                <span class="feature">🔗 Dosya Birleştirme</span>
+                <span class="feature">⚡ Hızlı Yazdırma</span>
+            </div>
+        </div>
+        <div class="main-content">
+            <!-- Tab Navigation -->
+            <div class="tab-container">
+                <button class="tab active" onclick="switchTab('single')">📄 Tek Dosya</button>
+                <button class="tab" onclick="switchTab('multiple')">📚 Çoklu Dosya</button>
+                <button class="tab" onclick="switchTab('queue')">📋 Yazdırma Kuyruğu</button>
+            </div>
+            <!-- Single File Tab -->
+            <div id="single-tab" class="tab-content active">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="file">📁 Dosya Seçin</label>
+                        <div class="file-input-wrapper">
+                            <div class="file-input" onclick="document.getElementById('file').click()">
+                                <div>📤 Dosya seçmek için tıklayın veya sürükleyin</div>
+                                <div style="font-size: 0.9em; margin-top: 5px; color: #95a5a6;">
+                                    Desteklenen: PDF, JPG, PNG, BMP, GIF, TIFF, DOCX
+                                </div>
+                            </div>
+                            <input type="file" id="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.bmp,.gif,.tiff,.docx">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>🎨 Layout Seçin</label>
+                        <div class="layout-grid">
+                            <div class="layout-option">
+                                <input type="radio" id="layout1" name="layout" value="1" checked>
+                                <label for="layout1" class="layout-label">
+                                    <div class="layout-preview">📄</div>
+                                    <div>Tek Sayfa</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="layout2" name="layout" value="2">
+                                <label for="layout2" class="layout-label">
+                                    <div class="layout-preview">📄📄</div>
+                                    <div>2 Kopya</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="layout4" name="layout" value="4">
+                                <label for="layout4" class="layout-label">
+                                    <div class="layout-preview">🗂️</div>
+                                    <div>4 Kopya</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="layout6" name="layout" value="6">
+                                <label for="layout6" class="layout-label">
+                                    <div class="layout-preview">📋</div>
+                                    <div>6 Kopya</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="layout9" name="layout" value="9">
+                                <label for="layout9" class="layout-label">
+                                    <div class="layout-preview">📊</div>
+                                    <div>9 Kopya</div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-panel">
+                        <h3 style="margin-bottom: 15px; color: #2c3e50;">⚙️ Yazdırma Ayarları</h3>
+                        <div class="settings-row">
+                            <label>Kalite:</label>
+                            <select id="quality">
+                                <option value="draft">Taslak (Hızlı)</option>
+                                <option value="standard" selected>Standart</option>
+                                <option value="high">Yüksek Kalite</option>
+                                <option value="best">En İyi Kalite</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <label>Kağıt Türü:</label>
+                            <select id="paper-type">
+                                <option value="plain" selected>Düz Kağıt</option>
+                                <option value="photo">Fotoğraf Kağıdı</option>
+                                <option value="glossy">Parlak Kağıt</option>
+                                <option value="matte">Mat Kağıt</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <label>Parlaklık:</label>
+                            <input type="range" id="brightness" min="0" max="100" value="50">
+                            <span class="range-value" id="brightness-value">50%</span>
+                        </div>
+                        <div class="settings-row">
+                            <label>Kontrast:</label>
+                            <input type="range" id="contrast" min="0" max="100" value="50">
+                            <span class="range-value" id="contrast-value">50%</span>
+                        </div>
+                    </div>
+                    <div class="checkbox-group" style="display: none;">
+                        <input type="checkbox" id="print-direct" checked>
+                        <label for="print-direct">🖨️ İşlem sonrası otomatik yazdır</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="save-settings">
+                        <label for="save-settings">💾 Bu ayarları kaydet</label>
+                    </div>
+                    <button type="submit" class="btn">
+                        <span class="spinner"></span>
+                        <span class="btn-text">🚀 Yazdırmayı Başlat</span>
+                    </button>
+                    <div class="progress-bar" id="single-progress">
+                        <div class="progress-fill" id="single-progress-fill"></div>
+                    </div>
+                </form>
+                <div class="preview-area" id="single-preview">
+                    <h4>📋 Önizleme</h4>
+                    <img id="preview-image" class="preview-image" alt="Dosya önizlemesi">
+                </div>
+            </div>
+            <!-- Multiple Files Tab -->
+            <div id="multiple-tab" class="tab-content">
+                <form id="multipleUploadForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="multiple-files">📁 Dosyaları Seçin (Çoklu)</label>
+                        <div class="file-input-wrapper">
+                            <div class="file-input" onclick="document.getElementById('multiple-files').click()">
+                                <div>📤 Birden fazla dosya seçmek için tıklayın</div>
+                                <div style="font-size: 0.9em; margin-top: 5px; color: #95a5a6;">
+                                    Ctrl/Cmd tuşu ile birden fazla dosya seçebilirsiniz
+                                </div>
+                            </div>
+                            <input type="file" id="multiple-files" name="files" multiple accept=".pdf,.jpg,.jpeg,.png,.bmp,.gif,.tiff,.docx">
+                        </div>
+                        <div class="file-list" id="file-list"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>🎨 Layout Seçin</label>
+                        <div class="layout-grid">
+                            <div class="layout-option">
+                                <input type="radio" id="multi-layout1" name="multi-layout" value="1" checked>
+                                <label for="multi-layout1" class="layout-label">
+                                    <div class="layout-preview">📄</div>
+                                    <div>Tek Sayfa</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="multi-layout2" name="multi-layout" value="2">
+                                <label for="multi-layout2" class="layout-label">
+                                    <div class="layout-preview">📄📄</div>
+                                    <div>2 Kopya</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="multi-layout4" name="multi-layout" value="4">
+                                <label for="multi-layout4" class="layout-label">
+                                    <div class="layout-preview">🗂️</div>
+                                    <div>4 Kopya</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="multi-layout6" name="multi-layout" value="6">
+                                <label for="multi-layout6" class="layout-label">
+                                    <div class="layout-preview">📋</div>
+                                    <div>6 Kopya</div>
+                                </label>
+                            </div>
+                            <div class="layout-option">
+                                <input type="radio" id="multi-layout9" name="multi-layout" value="9">
+                                <label for="multi-layout9" class="layout-label">
+                                    <div class="layout-preview">📊</div>
+                                    <div>9 Kopya</div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="combine-files">
+                        <label for="combine-files">🔗 Dosyaları tek PDF'te birleştir</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="sort-files">
+                        <label for="sort-files">📊 Dosyaları alfabetik sırala</label>
+                    </div>
+                    <div class="checkbox-group" style="display: none;">
+                        <input type="checkbox" id="print-multiple-direct" checked>
+                        <label for="print-multiple-direct">🖨️ İşlem sonrası otomatik yazdır</label>
+                    </div>
+                    <button type="submit" class="btn">
+                        <span class="spinner"></span>
+                        <span class="btn-text">🚀 Toplu Yazdırmayı Başlat</span>
+                    </button>
+                    <div class="progress-bar" id="multiple-progress">
+                        <div class="progress-fill" id="multiple-progress-fill"></div>
+                    </div>
+                </form>
+            </div>
+            <!-- Queue Tab -->
+            <div id="queue-tab" class="tab-content">
+                <div class="form-group">
+                    <label>📋 Yazdırma Kuyruğu</label>
+                    <div class="queue-panel" id="print-queue">
+                        <div class="queue-item">
+                            <span>📄 document.pdf (Hazırlanıyor...)</span>
+                            <span>⏳ %45</span>
+                        </div>
+                        <div class="queue-item">
+                            <span>🖼️ image.jpg (Bekliyor)</span>
+                            <span>⏸️ Beklemede</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <button class="btn" onclick="clearQueue()" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+                        🗑️ Kuyruğu Temizle
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label>📊 İstatistikler</label>
+                    <div class="settings-panel">
+                        <div class="settings-row">
+                            <span>Bugün yazdırılan:</span>
+                            <span><strong>12 dosya</strong></span>
+                        </div>
+                        <div class="settings-row">
+                            <span>Bu hafta yazdırılan:</span>
+                            <span><strong>45 dosya</strong></span>
+                        </div>
+                        <div class="settings-row">
+                            <span>Toplam mürekkep kullanımı:</span>
+                            <span><strong>~15ml</strong></span>
+                        </div>
+                        <div class="settings-row">
+                            <span>Ortalama işlem süresi:</span>
+                            <span><strong>2.3 saniye</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Result Area -->
+            <div id="result" class="result">
+                <div id="result-message"></div>
+                <div id="result-details" class="result-details"></div>
+            </div>
+        </div>
+        <div class="footer">
+            <div>Web Print Service - Ağ Yazdırma Servisi</div>
+            <div class="system-info">
+                <div>🖥️ Sistem: <span id="system-info">Yükleniyor...</span></div>
+                <div>🌐 Tarayıcı: <span id="browser-info">Yükleniyor...</span></div>
+                <div>📶 Bağlantı: <span id="connection-status">Kontrol ediliyor...</span></div>
+                <div>🖨️ Yazıcı: <span id="printer-connection">Varsayılan yazıcı bekleniyor...</span></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let selectedFiles = [];
+        let printQueue = [];
+        let savedSettings = {};
+        
+        // Sistem bilgilerini göster
+        function updateSystemInfo() {
+            document.getElementById('system-info').textContent = navigator.platform;
+            document.getElementById('browser-info').textContent = navigator.userAgent.split(' ').slice(-1)[0];
+            
+            // Bağlantı durumunu kontrol et
+            updateConnectionStatus();
+            fetchPrinterStatus();
+        }
+        
+        // Bağlantı durumunu güncelle
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connection-status');
+            if (navigator.onLine) {
+                statusEl.innerHTML = '🟢 Çevrimiçi';
+            } else {
+                statusEl.innerHTML = '🔴 Çevrimdışı';
+            }
+        }
+        
+        // Backend'den yazıcı durumunu al
+        function fetchPrinterStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const printerStatusEl = document.getElementById('printer-status');
+                    
+                    if (data.win32print_available === false) {
+                        printerStatusEl.className = 'printer-status offline';
+                        printerStatusEl.innerHTML = '⚠️ Yazıcı modülü yüklü değil - pip install pywin32';
+                    } else if (data.default_printer && data.printer_ready) {
+                        printerStatusEl.className = 'printer-status';
+                        printerStatusEl.innerHTML = `� Yazıcı Hazır: ${data.default_printer}`;
+                    } else if (data.default_printer && !data.printer_ready) {
+                        printerStatusEl.className = 'printer-status offline';
+                        printerStatusEl.innerHTML = `🔴 Yazıcı Çevrimdışı: ${data.default_printer} - Bağlantıyı Kontrol Edin`;
+                    } else if (data.printer_error || data.win32print_error) {
+                        printerStatusEl.className = 'printer-status offline';
+                        printerStatusEl.innerHTML = '🔴 Yazıcı bulunamadı veya bağlı değil';
+                    } else {
+                        printerStatusEl.className = 'printer-status offline';
+                        printerStatusEl.innerHTML = '⚠️ Yazıcı durumu alınamadı';
+                    }
+                })
+                .catch(error => {
+                    console.error('Yazıcı durumu alınamadı:', error);
+                    const printerStatusEl = document.getElementById('printer-status');
+                    printerStatusEl.className = 'printer-status offline';
+                    printerStatusEl.innerHTML = '� Sunucu bağlantısı yok';
+                });
+        }
+        
+        // Tab değiştirme fonksiyonu
+        function switchTab(tabName) {
+            // Tüm tabları gizle
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Tüm tab butonlarının active sınıfını kaldır
+            document.querySelectorAll('.tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Seçili tabı göster
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Tıklanan butona active sınıfı ekle
+            event.currentTarget.classList.add('active');
+            
+            // Sonuçları temizle
+            hideResult();
+            
+            // Queue tabı için kuyruğu güncelle
+            if (tabName === 'queue') {
+                updateQueueDisplay();
+            }
+        }
+        
+        // Drag & Drop işlemleri
+        function setupDragDrop() {
+            const fileInputs = document.querySelectorAll('.file-input');
+            
+            fileInputs.forEach(input => {
+                input.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    input.classList.add('drag-over');
+                });
+                
+                input.addEventListener('dragleave', () => {
+                    input.classList.remove('drag-over');
+                });
+                
+                input.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    input.classList.remove('drag-over');
+                    
+                    const files = e.dataTransfer.files;
+                    if (input.closest('#single-tab')) {
+                        document.getElementById('file').files = files;
+                        handleSingleFileSelect();
+                    } else {
+                        document.getElementById('multiple-files').files = files;
+                        updateFileList();
+                    }
+                });
+            });
+        }
+        
+        // Tek dosya seçildiğinde önizleme
+        function handleSingleFileSelect() {
+            const file = document.getElementById('file').files[0];
+            if (file) {
+                // Dosya doğrulama
+                if (!validateFile(file)) return;
+                
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const previewArea = document.getElementById('single-preview');
+                        const previewImage = document.getElementById('preview-image');
+                        previewImage.src = e.target.result;
+                        previewArea.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    document.getElementById('single-preview').style.display = 'none';
+                }
+            }
+        }
+        
+        // Çoklu dosya listesini güncelle
+        function updateFileList() {
+            const files = document.getElementById('multiple-files').files;
+            const fileList = document.getElementById('file-list');
+            selectedFiles = Array.from(files);
+            
+            fileList.innerHTML = '';
+            
+            Array.from(files).forEach((file, index) => {
+                // Dosya doğrulama
+                if (!validateFile(file)) return;
+                
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)} - ${getFileIcon(file.type)}</div>
+                    </div>
+                    <button type="button" class="remove-file" onclick="removeFile(${index})">×</button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        }
+        
+        // Dosya ikonunu al
+        function getFileIcon(fileType) {
+            if (fileType.includes('pdf')) return '📄 PDF';
+            if (fileType.includes('image')) return '🖼️ Resim';
+            if (fileType.includes('document')) return '📝 Belge';
+            return '📎 Dosya';
+        }
+        
+                // Dosya kaldırma
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            
+            // File input'u güncelle
+            const dt = new DataTransfer();
+            selectedFiles.forEach(file => dt.items.add(file));
+            document.getElementById('multiple-files').files = dt.files;
+            
+            updateFileList();
+        }
+        
+        // Dosya boyutunu formatla
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Progress bar güncelleme
+        function updateProgress(progressId, percentage) {
+            const progressFill = document.getElementById(progressId);
+            const progressBar = progressFill.parentElement;
+            
+            progressBar.style.display = 'block';
+            progressFill.style.width = percentage + '%';
+            
+            if (percentage >= 100) {
+                setTimeout(() => {
+                    progressBar.style.display = 'none';
+                    progressFill.style.width = '0%';
+                }, 1000);
+            }
+        }
+        
+        // Sonuç gösterme
+        function showResult(type, message, details = '') {
+            const result = document.getElementById('result');
+            const resultMessage = document.getElementById('result-message');
+            const resultDetails = document.getElementById('result-details');
+            
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+            resultMessage.textContent = message;
+            resultDetails.textContent = details;
+            
+            // Sayfayı sonuca kaydır
+            result.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Sonuç gizleme
+        function hideResult() {
+            document.getElementById('result').style.display = 'none';
+        }
+        
+        // Buton durumunu değiştir
+        function setButtonLoading(button, loading) {
+            const btnText = button.querySelector('.btn-text');
+            const originalText = loading ? btnText.textContent : btnText.getAttribute('data-original') || '🚀 Yazdırmayı Başlat';
+            
+            if (loading) {
+                button.classList.add('loading');
+                button.disabled = true;
+                btnText.setAttribute('data-original', btnText.textContent);
+                btnText.textContent = '⏳ İşleniyor...';
+            } else {
+                button.classList.remove('loading');
+                button.disabled = false;
+                btnText.textContent = originalText;
+            }
+        }
+        
+        // Ayarları kaydet/yükle
+        function saveSettings() {
+            const settings = {
+                quality: document.getElementById('quality').value,
+                paperType: document.getElementById('paper-type').value,
+                brightness: document.getElementById('brightness').value,
+                contrast: document.getElementById('contrast').value,
+                printDirect: true // Her zaman otomatik yazdır
+            };
+            
+            savedSettings = settings;
+            localStorage.setItem('printerSettings', JSON.stringify(settings));
+            
+            showResult('success', '💾 Ayarlar Kaydedildi', 'Ayarlarınız bir sonraki kullanımda otomatik yüklenecek.');
+        }
+        
+        function loadSettings() {
+            try {
+                const storedSettings = localStorage.getItem('printerSettings');
+                if (storedSettings) {
+                    savedSettings = JSON.parse(storedSettings);
+                    
+                    document.getElementById('quality').value = savedSettings.quality || 'standard';
+                    document.getElementById('paper-type').value = savedSettings.paperType || 'plain';
+                    document.getElementById('brightness').value = savedSettings.brightness || '50';
+                    document.getElementById('contrast').value = savedSettings.contrast || '50';
+                    
+                    // Otomatik yazdırma seçeneği her zaman açık
+                    document.getElementById('print-direct').checked = true;
+                    document.getElementById('print-multiple-direct').checked = true;
+                    
+                    updateRangeValues();
+                }
+            } catch (e) {
+                console.error('Ayarlar yüklenemedi:', e);
+            }
+        }
+        
+        // Range değerlerini güncelle
+        function updateRangeValues() {
+            const brightness = document.getElementById('brightness');
+            const contrast = document.getElementById('contrast');
+            
+            document.getElementById('brightness-value').textContent = brightness.value + '%';
+            document.getElementById('contrast-value').textContent = contrast.value + '%';
+        }
+        
+        // Kuyruk işlemleri
+        function addToQueue(fileName, status = 'Bekliyor') {
+            printQueue.push({
+                id: Date.now(),
+                fileName: fileName,
+                status: status,
+                progress: 0,
+                timestamp: new Date()
+            });
+            updateQueueDisplay();
+        }
+        
+        function updateQueueDisplay() {
+            const queueEl = document.getElementById('print-queue');
+            
+            if (printQueue.length === 0) {
+                queueEl.innerHTML = '<div class="queue-item"><span>📋 Kuyruk boş</span><span>✅ Hazır</span></div>';
+                return;
+            }
+            
+            queueEl.innerHTML = '';
+            printQueue.forEach((item, index) => {
+                const queueItem = document.createElement('div');
+                queueItem.className = 'queue-item';
+                
+                let statusIcon = '⏸️';
+                if (item.status === 'İşleniyor') statusIcon = '⏳';
+                else if (item.status === 'Tamamlandı') statusIcon = '✅';
+                else if (item.status === 'Hata') statusIcon = '❌';
+                
+                queueItem.innerHTML = `
+                    <span>${getFileIcon('application/pdf')} ${item.fileName} (${item.status})</span>
+                    <span>${statusIcon} ${item.progress > 0 ? item.progress + '%' : 'Beklemede'}</span>
+                `;
+                queueEl.appendChild(queueItem);
+            });
+        }
+        
+        function clearQueue() {
+            if (confirm('Yazdırma kuyruğunu temizlemek istediğinizden emin misiniz?')) {
+                printQueue = [];
+                updateQueueDisplay();
+                showResult('success', '🗑️ Kuyruk Temizlendi', 'Tüm bekleyen işler iptal edildi.');
+            }
+        }
+        
+        // Dosya doğrulama
+        function validateFile(file) {
+            const maxSize = 50 * 1024 * 1024; // 50MB
+            const allowedTypes = [
+                'application/pdf',
+                'image/jpeg',
+                'image/png',
+                'image/bmp',
+                'image/gif',
+                'image/tiff',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            ];
+            
+            if (file.size > maxSize) {
+                showResult('warning', '⚠️ Uyarı', `Dosya boyutu çok büyük: ${formatFileSize(file.size)}. Maksimum 50MB olmalıdır.`);
+                return false;
+            }
+            
+            // MIME tipi veya dosya uzantısını kontrol et
+            const fileExt = file.name.split('.').pop().toLowerCase();
+            const validExt = ['pdf', 'jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff', 'docx'];
+            
+            if (!allowedTypes.includes(file.type) && !validExt.includes(fileExt)) {
+                showResult('warning', '⚠️ Uyarı', `Desteklenmeyen dosya türü: ${file.type || fileExt}`);
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Form gönderme - Tek dosya
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('file');
+            const layout = document.querySelector('input[name="layout"]:checked').value;
+            const saveSettingsChk = document.getElementById('save-settings').checked;
+            const button = this.querySelector('.btn');
+            
+            if (!fileInput.files.length) {
+                showResult('error', '❌ Hata', 'Lütfen bir dosya seçin.');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            if (!validateFile(file)) return;
+            
+            if (saveSettingsChk) {
+                saveSettings();
+            }
+            
+            const fileName = file.name;
+            setButtonLoading(button, true);
+            hideResult();
+            
+            // Kuyruğa ekle
+            addToQueue(fileName, 'İşleniyor');
+            
+            // Form verilerini hazırla
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('layout', layout);
+            formData.append('print_direct', 'true'); // Her zaman yazdır
+            
+            // Kalite ve diğer ayarları ekle
+            formData.append('quality', document.getElementById('quality').value);
+            formData.append('paper_type', document.getElementById('paper-type').value);
+            formData.append('brightness', document.getElementById('brightness').value);
+            formData.append('contrast', document.getElementById('contrast').value);
+            
+            // API'ye gönder
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                setButtonLoading(button, false);
+                
+                // Kuyruğu güncelle
+                const queueItem = printQueue.find(item => item.fileName === fileName);
+                if (queueItem) {
+                    queueItem.status = data.success ? 'Tamamlandı' : 'Hata';
+                    queueItem.progress = 100;
+                    updateQueueDisplay();
+                }
+                
+                updateProgress('single-progress-fill', 100);
+                
+                if (data.success) {
+                    showResult('success', '✅ Başarılı!', 
+                        `Dosya "${fileName}" ${layout} layout ile yazdırıldı.`);
+                } else {
+                    showResult('error', '❌ Yazdırma Hatası', data.message || 'Dosya yazdırılırken bir hata oluştu.');
+                }
+            })
+            .catch(error => {
+                console.error('Upload hatası:', error);
+                setButtonLoading(button, false);
+                
+                // Kuyruğu güncelle
+                const queueItem = printQueue.find(item => item.fileName === fileName);
+                if (queueItem) {
+                    queueItem.status = 'Hata';
+                    queueItem.progress = 100;
+                    updateQueueDisplay();
+                }
+                
+                updateProgress('single-progress-fill', 100);
+                
+                showResult('error', '❌ Bağlantı Hatası', 'Sunucuya bağlanırken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
+            });
+            
+            // İşlem ilerlemesini simüle et
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress > 95) progress = 95; // Gerçek tamamlanma için bekle
+                
+                updateProgress('single-progress-fill', progress);
+                
+                // Kuyruktaki ilerlemeyi güncelle
+                const queueItem = printQueue.find(item => item.fileName === fileName);
+                if (queueItem) {
+                    queueItem.progress = Math.floor(progress);
+                    updateQueueDisplay();
+                }
+                
+                if (progress >= 95) {
+                    clearInterval(interval);
+                }
+            }, 300);
+        });
+        
+        // Form gönderme - Çoklu dosya
+        document.getElementById('multipleUploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const files = document.getElementById('multiple-files').files;
+            const layout = document.querySelector('input[name="multi-layout"]:checked').value;
+            const combineFiles = document.getElementById('combine-files').checked;
+            const sortFiles = document.getElementById('sort-files').checked;
+            const button = this.querySelector('.btn');
+            
+            if (!files.length) {
+                showResult('error', '❌ Hata', 'Lütfen en az bir dosya seçin.');
+                return;
+            }
+            
+            let allValid = true;
+            for (let i = 0; i < files.length; i++) {
+                if (!validateFile(files[i])) {
+                    allValid = false;
+                    break;
+                }
+            }
+            
+            if (!allValid) return;
+            
+            setButtonLoading(button, true);
+            hideResult();
+            
+            // Form verilerini hazırla
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            formData.append('layout', layout);
+            formData.append('combine', combineFiles ? 'true' : 'false');
+            formData.append('sort', sortFiles ? 'true' : 'false');
+            formData.append('print_direct', 'true'); // Her zaman yazdır
+            
+            // Kalite ve diğer ayarları ekle
+            formData.append('quality', document.getElementById('quality').value);
+            formData.append('paper_type', document.getElementById('paper-type').value);
+            formData.append('brightness', document.getElementById('brightness').value);
+            formData.append('contrast', document.getElementById('contrast').value);
+            
+            // İşlem adını oluştur
+            const processName = combineFiles ? 'Birleştirilmiş_Dosyalar.pdf' : `${files.length}_Dosya_Toplu`;
+            
+            // Kuyruğa ekle
+            addToQueue(processName, 'İşleniyor');
+            
+            // API'ye gönder
+            fetch('/upload-multiple', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                setButtonLoading(button, false);
+                
+                // Kuyruğu güncelle
+                const queueItem = printQueue.find(item => item.fileName === processName);
+                if (queueItem) {
+                    queueItem.status = data.success ? 'Tamamlandı' : 'Hata';
+                    queueItem.progress = 100;
+                    updateQueueDisplay();
+                }
+                
+                updateProgress('multiple-progress-fill', 100);
+                
+                if (data.success) {
+                    const actionText = combineFiles ? 'birleştirilerek' : 'ayrı ayrı';
+                    const sortText = sortFiles ? ' (alfabetik sırayla)' : '';
+                    showResult('success', '✅ Başarılı!', 
+                        `${files.length} dosya ${actionText} ${layout} layout ile yazdırıldı${sortText}.`);
+                } else {
+                    showResult('error', '❌ Yazdırma Hatası', data.message || 'Dosyalar yazdırılırken bir hata oluştu.');
+                }
+            })
+            .catch(error => {
+                console.error('Upload hatası:', error);
+                setButtonLoading(button, false);
+                
+                // Kuyruğu güncelle
+                const queueItem = printQueue.find(item => item.fileName === processName);
+                if (queueItem) {
+                    queueItem.status = 'Hata';
+                    queueItem.progress = 100;
+                    updateQueueDisplay();
+                }
+                
+                updateProgress('multiple-progress-fill', 100);
+                
+                showResult('error', '❌ Bağlantı Hatası', 'Sunucuya bağlanırken bir hata oluştu. Lütfen internet bağlantınızı kontrol edin.');
+            });
+            
+            // İşlem ilerlemesini simüle et
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15; // Çoklu dosya daha yavaş ilerler
+                if (progress > 95) progress = 95; // Gerçek tamamlanma için bekle
+                
+                updateProgress('multiple-progress-fill', progress);
+                
+                // Kuyruktaki ilerlemeyi güncelle
+                const queueItem = printQueue.find(item => item.fileName === processName);
+                if (queueItem) {
+                    queueItem.progress = Math.floor(progress);
+                    updateQueueDisplay();
+                }
+                
+                if (progress >= 95) {
+                    clearInterval(interval);
+                }
+            }, 400);
+        });
+        
+        // Yardımcı fonksiyonlar
+        function retryPrint(jobId) {
+            fetch(`/retry-print/${jobId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showResult('success', '✅ Yeniden Yazdırma Başarılı', data.message);
+                    } else {
+                        showResult('error', '❌ Yeniden Yazdırma Hatası', data.message);
+                    }
+                })
+                .catch(error => {
+                    showResult('error', '❌ Bağlantı Hatası', 'Sunucuya bağlanırken bir hata oluştu.');
+                });
+        }
+        
+        // Event listeners
+        document.getElementById('file').addEventListener('change', handleSingleFileSelect);
+        document.getElementById('multiple-files').addEventListener('change', updateFileList);
+        
+        // Range input listeners
+        document.getElementById('brightness').addEventListener('input', updateRangeValues);
+        document.getElementById('contrast').addEventListener('input', updateRangeValues);
+        
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSystemInfo();
+            setupDragDrop();
+            loadSettings();
+            updateRangeValues();
+            
+            // Bağlantı durumunu dinle
+            window.addEventListener('online', updateConnectionStatus);
+            window.addEventListener('offline', updateConnectionStatus);
+            
+            // Periyodik yazıcı durumu kontrolü
+            setInterval(fetchPrinterStatus, 30000); // 30 saniyede bir
+            
+            // Otomatik yazdırma seçeneğini her zaman açık tut
+            document.getElementById('print-direct').checked = true;
+            document.getElementById('print-multiple-direct').checked = true;
+            
+            // Demo queue items
+            addToQueue('örnek_belge.pdf', 'Tamamlandı');
+            addToQueue('resim_koleksiyonu.zip', 'Bekliyor');
+        });
+        
+        // Klavye kısayolları
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+P: Yazdırma başlat
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                const activeTab = document.querySelector('.tab-content.active');
+                const form = activeTab.querySelector('form');
+                if (form) {
+                    form.querySelector('.btn').click();
+                }
+            }
+            
+            // Escape: Sonuçları gizle
+            if (e.key === 'Escape') {
+                hideResult();
+            }
+        });
+    </script>
+</body>
+</html>
