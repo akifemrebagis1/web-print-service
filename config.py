@@ -4,6 +4,7 @@ Environment variable'lardan veya varsayılan değerlerden konfigürasyon yükler
 """
 
 import os
+import secrets
 from pathlib import Path
 
 
@@ -17,6 +18,13 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', os.urandom(24).hex())
     DEBUG = os.environ.get(
         'FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
+
+    # Erişim token'ı.
+    # Servis 0.0.0.0 üzerinden tüm yerel ağa açıldığı için kimlik doğrulama
+    # zorunludur. PRINT_SERVICE_TOKEN tanımlı değilse her açılışta rastgele
+    # bir token üretilir ve konsola yazdırılır.
+    ACCESS_TOKEN = os.environ.get(
+        'PRINT_SERVICE_TOKEN') or secrets.token_urlsafe(16)
 
     # Upload ayarları
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', str(BASE_DIR / 'uploads'))

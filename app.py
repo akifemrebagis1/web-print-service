@@ -25,8 +25,10 @@ Gereksinimler:
     - pywin32 (Windows için)
 """
 
-from flask import Flask, render_template, request, flash, redirect, url_for, jsonify, send_from_directory
+from flask import Flask, render_template, request, flash, redirect, url_for, jsonify, send_from_directory, session
 import os
+import secrets
+from urllib.parse import urlparse
 from werkzeug.utils import secure_filename
 from layout_handler import create_layout_pdf, create_multi_file_pdf
 from config import get_config
@@ -58,6 +60,116 @@ app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
 app.config['TEMPLATES_FOLDER'] = config.TEMPLATES_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 app.secret_key = config.SECRET_KEY
+
+# Oturum çerezi güvenlik bayrakları.
+# SameSite=Strict, çerezin siteler arası isteklerde gönderilmesini engeller;
+# bu da cookie tabanlı CSRF'in büyük kısmını kapatır.
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
+
+# Kimlik doğrulaması gerektirmeyen yollar (giriş ekranı ve statik dosyalar)
+_PUBLIC_PATHS = {'/login'}
+
+
+def _token_is_valid(candidate):
+    """Erişim token'ını sabit zamanlı karşılaştırır."""
+    if not candidate:
+        return False
+    return secrets.compare_digest(str(candidate), config.ACCESS_TOKEN)
+
+
+def _request_origin_is_same_site():
+    """Durum değiştiren istekler için Origin/Referer kontrolü.
+
+    SameSite=Strict çerezine ek bir savunma katmanı. Origin başlığı yoksa
+    Referer'a bakılır; ikisi de yoksa istek reddedilir.
+    """
+    origin = request.headers.get('Origin') or request.headers.get('Referer')
+    if not origin:
+        return False
+    try:
+        return urlparse(origin).netloc == request.host
+    except ValueError:
+        return False
+
+
+@app.before_request
+def require_authentication():
+    """Tüm endpoint'leri token tabanlı kimlik doğrulamasının arkasına alır.
+
+    Servis varsayılan olarak 0.0.0.0 üzerinden tüm yerel ağı dinlediği için
+    kimlik doğrulaması olmadan dosya yükleme, yazdırma ve silme uçları
+    ağdaki herkese açık kalıyordu.
+    """
+    path = request.path
+
+    # Statik dosyalar ve giriş ekranı serbest
+    if path in _PUBLIC_PATHS or path.startswith('/static/'):
+        return None
+
+    # Zaten doğrulanmış oturum
+    if session.get('authenticated'):
+        # Durum değiştiren isteklerde CSRF kontrolü
+        if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+            if not _request_origin_is_same_site():
+                return jsonify({
+                    'success': False,
+                    'message': 'İstek reddedildi: geçersiz kaynak (CSRF koruması).'
+                }), 403
+        return None
+
+    # Token ile ilk doğrulama: ?token=... veya X-Auth-Token başlığı
+    supplied = request.args.get('token') or request.headers.get('X-Auth-Token')
+    if _token_is_valid(supplied):
+        session['authenticated'] = True
+        session.permanent = False
+        # Token'ı URL'de bırakmamak için temiz adrese yönlendir
+        if request.method == 'GET' and request.args.get('token'):
+            return redirect(request.path)
+        return None
+
+    # Doğrulanmamış istek
+    if request.method == 'GET' and request.accept_mimetypes.accept_html:
+        return redirect(url_for('login'))
+    return jsonify({
+        'success': False,
+        'message': 'Yetkisiz istek. Geçerli bir erişim token\'ı gerekli.'
+    }), 401
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Basit token giriş ekranı."""
+    error = ''
+    if request.method == 'POST':
+        if _token_is_valid(request.form.get('token')):
+            session['authenticated'] = True
+            return redirect(url_for('index'))
+        error = 'Geçersiz token.'
+
+    return f"""<!DOCTYPE html>
+<html lang="tr"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yazdırma Servisi — Giriş</title>
+<style>
+ body{{font-family:system-ui,sans-serif;display:flex;align-items:center;
+ justify-content:center;height:100vh;margin:0;background:#f4f4f5}}
+ form{{background:#fff;padding:32px;border-radius:12px;
+ box-shadow:0 1px 3px rgba(0,0,0,.1);min-width:280px}}
+ h1{{font-size:18px;margin:0 0 16px}}
+ input{{width:100%;padding:10px;border:1px solid #d4d4d8;border-radius:6px;
+ box-sizing:border-box;font-size:15px}}
+ button{{width:100%;margin-top:12px;padding:10px;border:0;border-radius:6px;
+ background:#18181b;color:#fff;font-size:15px;cursor:pointer}}
+ .err{{color:#b91c1c;font-size:13px;margin-top:10px}}
+</style></head><body>
+<form method="post">
+  <h1>🖨️ Yazdırma Servisi</h1>
+  <input type="password" name="token" placeholder="Erişim token'ı"
+         autocomplete="current-password" autofocus>
+  <button type="submit">Giriş</button>
+  {'<div class="err">' + error + '</div>' if error else ''}
+</form></body></html>"""
 
 # İzin verilen dosya uzantıları
 ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
@@ -299,9 +411,12 @@ def print_image_with_multiple_methods(file_path, printer_name):
         print("   Command line yazdırma deneniyor...")
         if platform.system() == "Windows":
             # Windows için lpr kullan
+            # GÜVENLİK: shell=True kaldırıldı. Windows'ta shell=True + liste
+            # argümanı, listeyi cmd.exe komut satırına birleştirir ve
+            # file_path içindeki kabuk metakarakterleri yorumlanır.
             result = subprocess.run([
                 'print', '/d:' + printer_name, file_path
-            ], shell=True, capture_output=True, text=True, timeout=20)
+            ], capture_output=True, text=True, timeout=20)
             if result.returncode == 0:
                 return True, "Command line ile yazdırıldı"
         else:
@@ -452,8 +567,20 @@ def advanced_print_pdf(output_pdf):
                 return True, "✅ macOS yazdırma başarılı"
             else:
                 # Alternatif yöntem
-                result = subprocess.run(
-                    ['cupsfilter', output_pdf, '|', 'lpr'], shell=True, capture_output=True, text=True)
+                # GÜVENLİK / DOĞRULUK: shell=True kaldırıldı. Önceki hâlde '|'
+                # bir kabuk borusu değil, cupsfilter'a giden düz bir argümandı.
+                # Boru artık Python tarafında, kabuk devreye girmeden kuruluyor.
+                cups = subprocess.Popen(
+                    ['cupsfilter', output_pdf], stdout=subprocess.PIPE)
+                lpr = subprocess.Popen(
+                    ['lpr'], stdin=cups.stdout,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if cups.stdout:
+                    cups.stdout.close()
+                lpr.communicate()
+                result = subprocess.CompletedProcess(
+                    args=['cupsfilter', output_pdf, 'lpr'],
+                    returncode=lpr.returncode, stdout='', stderr='')
                 if result.returncode == 0:
                     return True, "✅ macOS cupsfilter yazdırma başarılı"
                 else:
@@ -735,19 +862,35 @@ def debug_printer():
     return jsonify({'status': 'Debug bilgileri konsola yazdırıldı'})
 
 
-@app.route('/test-print/<path:filename>')
+@app.route('/test-print/<filename>')
 def test_print_file(filename):
-    """Belirli bir dosyayı test yazdırma"""
+    """Upload klasöründeki belirli bir dosyayı test yazdırma.
+
+    GÜVENLİK: <path:filename> yerine <filename> kullanılıyor; path
+    dönüştürücüsü '/' karakterine izin verdiği için dizin dışına çıkmayı
+    mümkün kılıyordu. Ayrıca secure_filename ile normalize edilip
+    realpath karşılaştırmasıyla UPLOAD_FOLDER içinde kaldığı doğrulanıyor.
+    """
     try:
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if not os.path.exists(file_path):
-            return jsonify({'success': False, 'message': 'Dosya bulunamadı'})
+        safe_name = secure_filename(filename)
+        if not safe_name:
+            return jsonify({'success': False, 'message': 'Geçersiz dosya adı'}), 400
+
+        upload_root = os.path.realpath(app.config['UPLOAD_FOLDER'])
+        file_path = os.path.realpath(os.path.join(upload_root, safe_name))
+
+        # Sınır kontrolü: dosya gerçekten upload klasörünün altında mı?
+        if os.path.commonpath([upload_root, file_path]) != upload_root:
+            return jsonify({'success': False, 'message': 'Geçersiz dosya yolu'}), 400
+
+        if not os.path.isfile(file_path):
+            return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 404
+
         success, message = advanced_print_pdf(file_path)
         return jsonify({
             'success': success,
             'message': message,
-            'file': filename,
-            'path': file_path
+            'file': safe_name
         })
     except Exception as e:
         return jsonify({'success': False, 'message': f'Test hatası: {str(e)}'})
@@ -794,9 +937,14 @@ def status():
         return jsonify({'error': str(e)})
 
 
-@app.route('/cleanup-all')
+@app.route('/cleanup-all', methods=['POST'])
 def cleanup_all_files():
-    """Tüm geçici dosyaları temizle"""
+    """Tüm geçici dosyaları temizle.
+
+    GÜVENLİK: Yıkıcı bir işlem olduğu için GET yerine POST. GET hâlinde
+    herhangi bir sayfadaki <img src="..."> etiketi bile silmeyi
+    tetikleyebiliyordu.
+    """
     try:
         upload_folder = app.config['UPLOAD_FOLDER']
         files_deleted = 0
@@ -879,6 +1027,21 @@ if __name__ == '__main__':
         os.makedirs(app.config['UPLOAD_FOLDER'])
         logger.info(
             f"📁 Upload klasörü oluşturuldu: {app.config['UPLOAD_FOLDER']}")
+
+    # Erişim token'ını göster. Servis kimlik doğrulaması olmadan
+    # kullanılamaz; kullanıcının bu değeri görmesi gerekir.
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        logger.info("=" * 60)
+        logger.info("🔐 ERİŞİM TOKEN'I")
+        if os.environ.get('PRINT_SERVICE_TOKEN'):
+            logger.info("   Kaynak: PRINT_SERVICE_TOKEN ortam değişkeni")
+        else:
+            logger.info("   Kaynak: bu açılış için rastgele üretildi")
+            logger.info("   Sabitlemek için: PRINT_SERVICE_TOKEN ortam değişkenini ayarlayın")
+        logger.info(f"   Token: {config.ACCESS_TOKEN}")
+        logger.info(
+            f"   Giriş: http://{get_local_ip()}:{config.PORT}/?token={config.ACCESS_TOKEN}")
+        logger.info("=" * 60)
 
     logger.info("\n🚀 Servis başlatılıyor...")
     logger.info("⏹️ Servisi durdurmak için Ctrl+C")
